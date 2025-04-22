@@ -40,8 +40,8 @@ throttle.start(7.5) # starts the motor at 7.5% PWM signal-> (0.075 * battery Vol
 steering.start(7.5) # starts the motor at 7.5% PWM signal-> (0.075 * Battery Voltage) - driver's loss
 
 for step in range(50):
-    percent = 7.5 + step * 0.05
-    throttle.ChangeDutyCycle(percent)
+    percent = 2.5 + step * 0.5
+    steering.ChangeDutyCycle(percent)
     print(percent)
     time.sleep(0.5)
 
