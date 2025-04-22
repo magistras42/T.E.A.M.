@@ -38,22 +38,12 @@ time.sleep(1)
 
 throttle.start(7.5) # starts the motor at 7.5% PWM signal-> (0.075 * battery Voltage) - driver's loss
 steering.start(7.5) # starts the motor at 7.5% PWM signal-> (0.075 * Battery Voltage) - driver's loss
-print(7.5)
 
-time.sleep(3)
-
-throttle.ChangeDutyCycle(8)
-print(8)
-
-time.sleep(20)
-
-throttle.ChangeDutyCycle(5)
-print(5)
-
-time.sleep(2)
-
-throttle.ChangeDutyCycle(7.5)
-print(7.5)
+for step in range(50):
+    percent = 7.5 + step * 0.05
+    throttle.ChangeDutyCycle(percent)
+    print(percent)
+    time.sleep(0.5)
 
 time.sleep(2)
 

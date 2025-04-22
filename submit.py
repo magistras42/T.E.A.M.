@@ -38,24 +38,27 @@ time.sleep(1)
 
 throttle.start(7.5) # starts the motor at 7.5% PWM signal-> (0.075 * battery Voltage) - driver's loss
 steering.start(7.5) # starts the motor at 7.5% PWM signal-> (0.075 * Battery Voltage) - driver's loss
-print(7.5)
 
+throttle.ChangeDutyCycle(8) # go forward
+print("GO FORWARD!")
 time.sleep(3)
 
-throttle.ChangeDutyCycle(8)
-print(8)
+throttle.ChangeDutyCycle(7.5) # stop
+print("HALT!")
+time.sleep(3)
 
-time.sleep(20)
+steering.ChangeDutyCycle(6) # turn left
+print("LEFT!!!")
+time.sleep(3)
 
-throttle.ChangeDutyCycle(5)
-print(5)
+steering.ChangeDutyCycle(9) # turn right
+print("RIGHT!!!")
+time.sleep(3)
 
-time.sleep(2)
+steering.ChangeDutyCycle(7.5) # turn straight
+print("FORWARD!!")
+time.sleep(3)
 
-throttle.ChangeDutyCycle(7.5)
-print(7.5)
-
-time.sleep(2)
 
 throttle.stop()
 steering.stop()
