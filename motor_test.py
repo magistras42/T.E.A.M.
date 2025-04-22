@@ -60,4 +60,4 @@ time.sleep(2)
 throttle.stop()
 steering.stop()
 
-GPIO.cleanup()
+GPIO.cleanup([steering_enable, throttle_enable])

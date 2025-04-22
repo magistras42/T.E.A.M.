@@ -39,7 +39,7 @@ time.sleep(1)
 throttle.start(7.5) # starts the motor at 7.5% PWM signal-> (0.075 * battery Voltage) - driver's loss
 steering.start(7.5) # starts the motor at 7.5% PWM signal-> (0.075 * Battery Voltage) - driver's loss
 
-for step in range(50):
+for step in range(1):
     percent = 2.5 + step * 0.5
     steering.ChangeDutyCycle(percent)
     print(percent)
@@ -50,4 +50,4 @@ time.sleep(2)
 throttle.stop()
 steering.stop()
 
-GPIO.cleanup()
+GPIO.cleanup([steering_enable, throttle_enable])

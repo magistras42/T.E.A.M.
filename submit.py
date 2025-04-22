@@ -47,11 +47,12 @@ throttle.ChangeDutyCycle(7.5) # stop
 print("HALT!")
 time.sleep(3)
 
-steering.ChangeDutyCycle(6) # turn left
+throttle.ChangeDutyCycle(8)
+steering.ChangeDutyCycle(5) # turn left
 print("LEFT!!!")
 time.sleep(3)
 
-steering.ChangeDutyCycle(9) # turn right
+steering.ChangeDutyCycle(10) # turn right
 print("RIGHT!!!")
 time.sleep(3)
 
@@ -59,8 +60,12 @@ steering.ChangeDutyCycle(7.5) # turn straight
 print("FORWARD!!")
 time.sleep(3)
 
+print("Halting!!")
+throttle.ChangeDutyCycle(7.5)
+time.sleep(1)
+
 
 throttle.stop()
 steering.stop()
 
-GPIO.cleanup()
+GPIO.cleanup([steering_enable, throttle_enable])
