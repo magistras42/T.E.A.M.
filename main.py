@@ -4,6 +4,22 @@ import time
 import math
 from smbus2 import SMBus
 
+def read_kernel_module_param(module_name, param_name):
+    path = f"/sys/module/{module_name}/parameters/{param_name}"
+    try:
+        with open(path, "r") as f:
+            value = f.read().strip()
+            return value
+    except FileNotFoundError:
+        print(f"Parameter '{param_name}' not found in module '{module_name}'")
+    except PermissionError:
+        print(f"Permission denied when accessing '{path}'")
+    return None
+
+# Example: read the 'combined' parameter from 'i2c_bcm2835'
+param_value = read_kernel_module_param("i2c_bcm2835", "combined")
+print(f"Value: {param_value}")
+
 # === MCP4728 Driver for Raspberry Pi ===
 class MCP4728:
     def __init__(self, i2c_bus=1, address=0x64):
