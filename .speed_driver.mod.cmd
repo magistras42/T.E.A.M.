@@ -1,0 +1,1 @@
+savedcmd_/home/pi/better_directory_name/speed_driver.mod := printf '%s\n'   speed_driver.o | awk '!x[$$0]++ { print("/home/pi/better_directory_name/"$$0) }' > /home/pi/better_directory_name/speed_driver.mod

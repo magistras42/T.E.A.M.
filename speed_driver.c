@@ -5,6 +5,7 @@
 #include <linux/platform_device.h>
 #include <linux/interrupt.h>
 #include <linux/moduleparam.h>
+#include <linux/of.h>
 
 /* 
  * We modified the speed_driver2.c file from a previous 424 team, whose
@@ -22,6 +23,8 @@ static struct gpio_desc *button_gpio;
 unsigned long t1 = 0;
 unsigned long t2;
 unsigned long elapsedTime;
+
+unsigned long get_time_us(void);
 
 // Adds elapsed_ms to a parameters file under sys/modules/parameters
 module_param(elapsedTime, long, S_IRUGO);
@@ -91,16 +94,13 @@ static int encoder_probe(struct platform_device *pdev)
 /* This function cleans up the device driver by freeing associated IRQ.
  * It also logs the removal to the kernel and exits successfully.
  */
-static int encoder_remove(struct platform_device *pdev)
+static void encoder_remove(struct platform_device *pdev)
 {
     // Free Associated IRQ to clean up driver.
     free_irq(irq_number, NULL);
 
     // Log to the kernel of removal.
     printk(KERN_INFO "The encoder has been removed!\n");
-
-    // Exit successfully.
-    return 0;
 }
 
 // Matches compatible gpio device.
@@ -112,7 +112,7 @@ static struct of_device_id matchy_match[] = {
 // Responsible for running the functions to prove and remove.
 static struct platform_driver adam_driver = {
     .probe   = encoder_probe,
-    .remove  = encoder_remove,
+    .remove_new  = encoder_remove,
     .driver  = {
         .name           = "The Rock: this name doesn't even matter",
         .owner          = THIS_MODULE,

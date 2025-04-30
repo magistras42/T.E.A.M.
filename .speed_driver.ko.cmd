@@ -1,0 +1,1 @@
+savedcmd_/home/pi/better_directory_name/speed_driver.ko := aarch64-linux-gnu-ld -r -EL  -maarch64elf -z noexecstack --no-warn-rwx-segments --build-id=sha1  -T arch/arm64/module.lds -o /home/pi/better_directory_name/speed_driver.ko /home/pi/better_directory_name/speed_driver.o /home/pi/better_directory_name/speed_driver.mod.o /home/pi/better_directory_name/.module-common.o
