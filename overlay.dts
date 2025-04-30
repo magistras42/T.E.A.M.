@@ -1,0 +1,15 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+    fragment@0 {
+        target-path = "/";
+        __overlay__ {
+            encoder_dev {
+                compatible = "t_e_a_m";
+                encoder-gpios = <&gpio 5 0 >;
+            };
+        };
+    };
+
+};
