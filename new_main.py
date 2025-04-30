@@ -385,7 +385,7 @@ try:
     # Set up video interface
     video = cv2.VideoCapture('/dev/video0')
     video.set(cv2.CAP_PROP_FRAME_WIDTH,320)
-    video.set(cv2.CAP_PROP_FRAME_HEIGHT,240)
+    video.set(cv2.CAP_PROP_FRAME_HEIGHT,320)
 
     # # Set up I2C interface with controller
     # i2c = busio.I2C(board.SCL, board.SDA)
@@ -474,5 +474,5 @@ except KeyboardInterrupt or Exception:
     GPIO.cleanup([steering_enable, throttle_enable])
     # mcp4728.channel_c.value = stop_car
 
-    throttleValues.write(str(stop_car) + '\n')
+    throttleValues.write(str(0) + '\n')
 
