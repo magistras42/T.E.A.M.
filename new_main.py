@@ -119,7 +119,7 @@ def getBoundaries(filename):
 
 def convert_to_HSV(frame):
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    # cv2.imshow("HSV",hsv)
+    cv2.imshow("HSV",hsv)
     return hsv
 
 def detect_edges(frame):
@@ -129,7 +129,7 @@ def detect_edges(frame):
 
     # detect edges
     edges = cv2.Canny(mask, 50, 100) 
-    # cv2.imshow("edges",edges)
+    cv2.imshow("edges",edges)
     return edges
 
 def region_of_interest(edges):
@@ -147,7 +147,7 @@ def region_of_interest(edges):
 
     cv2.fillPoly(mask, polygon, 255) # fill the polygon with blue color 
     cropped_edges = cv2.bitwise_and(edges, mask) 
-    # cv2.imshow("roi",cropped_edges)
+    cv2.imshow("roi",cropped_edges)
     return cropped_edges
 
 def detect_line_segments(cropped_edges):
@@ -166,6 +166,7 @@ def average_slope_intercept(frame, line_segments):
     if line_segments is None:
         print("no line segment detected")
         return lane_lines
+    print("YES line segment!!")
 
     # Initialize variables
     height, width,_ = frame.shape
@@ -329,6 +330,8 @@ def adjust_steering(control_val, steering, steeringValues):
     our_diff = (control_val) / 45.0
     val = center + (max_diff * our_diff)
     steering.ChangeDutyCycle(val)
+    print("Steering duty cycle: " + str(val))
+    print("Steering angle: " + str(control_val))
 
     steeringValues.write(str(input) + '\n')
 
@@ -388,18 +391,23 @@ try:
 
     # Set up video interface
     video = cv2.VideoCapture('/dev/video0')
-    # video.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-    # video.set(cv2.CAP_PROP_FRAME_HEIGHT, 320)
+    video.set(cv2.CAP_PROP_FRAME_WIDTH, 160)
+    video.set(cv2.CAP_PROP_FRAME_HEIGHT, 120)
 
     time.sleep(0.5)
 
     while True:
+        
+        time.sleep(0.1)
         # Get the frame from the camera
-        ret, frame = video.read()
-        print(frame.shape)
+        ret, original_frame = video.read()
+        # print(frame[:10,:10,0])
         # frame = cv2.resize(original_frame, (160, 120))
-        # frame = cv2.flip(frame,-1)
+        frame = cv2.flip(original_frame,-1)
         cv2.imshow("frame", frame)
+        # Break on 'q' key
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
 
         # Check the current speed off encoder
         with open("/sys/module/speed_driver/parameters/elapsedTime", "r") as filetoread:
