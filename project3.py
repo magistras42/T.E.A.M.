@@ -41,14 +41,14 @@ steering.start(7.5) # starts the motor at 7.5% PWM signal-> (0.075 * Battery Vol
 
 throttle.ChangeDutyCycle(8) # go forward
 print("GO FORWARD!")
-time.sleep(10)
+time.sleep(2)
 
 throttle.ChangeDutyCycle(7.5) # stop
 print("HALT!")
-time.sleep(3)
+time.sleep(2)
 
 
-exit(0);
+# exit(0);
 
 throttle.ChangeDutyCycle(8)
 steering.ChangeDutyCycle(5) # turn left

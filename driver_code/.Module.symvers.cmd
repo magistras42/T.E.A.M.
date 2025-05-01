@@ -1,0 +1,1 @@
+savedcmd_/home/pi/better_directory_name/driver_code/Module.symvers :=  scripts/mod/modpost -M -m -a      -o /home/pi/better_directory_name/driver_code/Module.symvers -T /home/pi/better_directory_name/driver_code/modules.order -i Module.symvers -e 

@@ -70,7 +70,7 @@ def average_slope_intercept(frame, line_segments):
     lane_lines = []
 
     if line_segments is None:
-        print("no line segment detected")
+        # print("no line segment detected")
         return lane_lines
 
     height, width,_ = frame.shape
@@ -84,7 +84,7 @@ def average_slope_intercept(frame, line_segments):
     for line_segment in line_segments:
         for x1, y1, x2, y2 in line_segment:
             if x1 == x2:
-                print("skipping vertical lines (slope = infinity)")
+                # print("skipping vertical lines (slope = infinity)")
                 continue
 
             fit = np.polyfit((x1, x2), (y1, y2), 1)
