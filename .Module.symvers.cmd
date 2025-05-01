@@ -1,1 +1,0 @@
-savedcmd_/home/pi/better_directory_name/Module.symvers :=  scripts/mod/modpost -M -m -a      -o /home/pi/better_directory_name/Module.symvers -T /home/pi/better_directory_name/modules.order -i Module.symvers -e 
