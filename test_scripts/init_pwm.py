@@ -16,16 +16,21 @@ GPIO.setup(steering_enable, GPIO.OUT)
 
 # Steering Motor Control
 steering = GPIO.PWM(steering_enable, 50) # set the switching frequency to 50 Hz
-steering.stop()
 
 # Throttle Motors Control
 throttle = GPIO.PWM(throttle_enable, 50) # set the switching frequency to 50 Hz
-throttle.stop()
+
+throttle.start(7.5) # starts the motor at 5% PWM signal-> (0.05 * battery Voltage) - driver's loss
+steering.start(7.5) # starts the motor at 7.5% PWM signal-> (0.075 * Battery Voltage) - driver's loss
 
 time.sleep(1)
 
-throttle.start(7.5) # starts the motor at 7.5% PWM signal-> (0.075 * battery Voltage) - driver's loss
-steering.start(7.5) # starts the motor at 7.5% PWM signal-> (0.075 * Battery Voltage) - driver's loss
+throttle.changeDutyCycle(10)
+time.sleep(2)
+throttle.changeDutyCycle(5)
+time.sleep(2)
+throttle.changeDutyCycle(7.5)
+time.sleep(2)
 
 print("you have been stopped fool")
 
