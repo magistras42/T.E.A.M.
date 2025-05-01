@@ -31,6 +31,10 @@ dValues = open("d_values.txt", 'a+')
 steeringValues = open("steering_values.txt", 'a+')
 throttleValues = open("throttle_values.txt", 'a+')
 
+HALT_SPEED = 7.5
+IDEAL_SPEED = 7.8
+STEER_CENTER = 7.5
+STEER_DIFF = 1.5
 
 def getRedFloorBoundaries():
     """
@@ -115,7 +119,7 @@ def getBoundaries(filename):
 
 def convert_to_HSV(frame):
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    cv2.imshow("HSV",hsv)
+    # cv2.imshow("HSV",hsv)
     return hsv
 
 def detect_edges(frame):
@@ -125,7 +129,7 @@ def detect_edges(frame):
 
     # detect edges
     edges = cv2.Canny(mask, 50, 100) 
-    cv2.imshow("edges",edges)
+    # cv2.imshow("edges",edges)
     return edges
 
 def region_of_interest(edges):
@@ -143,7 +147,7 @@ def region_of_interest(edges):
 
     cv2.fillPoly(mask, polygon, 255) # fill the polygon with blue color 
     cropped_edges = cv2.bitwise_and(edges, mask) 
-    cv2.imshow("roi",cropped_edges)
+    # cv2.imshow("roi",cropped_edges)
     return cropped_edges
 
 def detect_line_segments(cropped_edges):
@@ -337,15 +341,19 @@ def adjust_steering(control_val, steering, steeringValues):
 #     throttleValues.write(str(currentSpeed) + '\n')
 #     return currentSpeed
 
-def change_speed(currentSpeed, throttle, throttleValues):
-    if (currentSpeed > 65535): currentSpeed = 65535
+def change_speed(time_diff, throttle, throttleValues):
+    if (time_diff > 4096): time_diff = 4096
+    if (time_diff <= 1): time_diff = 1
 
-    diff = (currentSpeed) / 65535.0
+    time_freq = 1.0 / time_diff
+
+    val = time_freq - (1.0/2048)
+
     val = 7.5 + (1.5 * diff)
     throttle.ChangeDutyCycle(val) # go forward
 
-    throttleValues.write(str(currentSpeed) + '\n')
-    return currentSpeed
+    throttleValues.write(str(time_diff) + '\n')
+    return time_diff
 
 # def decrease_speed(currentSpeed, throttleValues):
 #     # currentSpeed -= 100
@@ -371,34 +379,27 @@ try:
 
     # Steering Motor Control
     steering = GPIO.PWM(steering_enable, 50) # set the switching frequency to 50 Hz
-    steering.stop()
 
     # Throttle Motors Control
     throttle = GPIO.PWM(throttle_enable, 50) # set the switching frequency to 50 Hz
-    throttle.stop()
 
-    time.sleep(1)
-
-    throttle.start(7.5) # starts the motor at 7.5% PWM signal-> (0.075 * battery Voltage) - driver's loss
-    steering.start(7.5) # starts the motor at 7.5% PWM signal-> (0.075 * Battery Voltage) - driver's loss
+    throttle.start(IDEAL_SPEED) # starts the motor at 7.5% PWM signal-> (0.075 * battery Voltage) - driver's loss
+    steering.start(STEER_CENTER) # starts the motor at 7.5% PWM signal-> (0.075 * Battery Voltage) - driver's loss
 
     # Set up video interface
     video = cv2.VideoCapture('/dev/video0')
-    video.set(cv2.CAP_PROP_FRAME_WIDTH,320)
-    video.set(cv2.CAP_PROP_FRAME_HEIGHT,320)
+    # video.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+    # video.set(cv2.CAP_PROP_FRAME_HEIGHT, 320)
 
-    # # Set up I2C interface with controller
-    # i2c = busio.I2C(board.SCL, board.SDA)
-    # mcp4728 = adafruit_mcp4728.MCP4728(i2c, 0x64)
-
-    # mcp4728.channel_c.value = start_car
-    # throttleValues.write(str(start_car) + '\n')
+    time.sleep(0.5)
 
     while True:
         # Get the frame from the camera
-        ret,original_frame = video.read()
-        frame = cv2.resize(original_frame, (160, 120))
-        frame = cv2.flip(frame,-1)
+        ret, frame = video.read()
+        print(frame.shape)
+        # frame = cv2.resize(original_frame, (160, 120))
+        # frame = cv2.flip(frame,-1)
+        cv2.imshow("frame", frame)
 
         # Check the current speed off encoder
         with open("/sys/module/speed_driver/parameters/elapsedTime", "r") as filetoread:
@@ -407,7 +408,7 @@ try:
         print("Time diff", time_diff)
         # Adjust accordingly
         # if time_diff >= 120:
-        currentSpeed = change_speed(currentSpeed, throttle, throttleValues)
+        # currentSpeed = change_speed(time_diff, throttle, throttleValues)
         # elif time_diff <= 110 and time_diff > 7:
         #     currentSpeed = decrease_speed(currentSpeed, throttleValues)
 
