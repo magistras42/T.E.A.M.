@@ -8,8 +8,10 @@ import time
 MAX_TICK_COUNT = 1 << 12
 
 # PD variables
-PD_KP = 0.07 ##proportional gain
-PD_KD = PD_KP * 0.03 #derivative gain
+# PD_KP = 0.07 ##proportional gain
+# PD_KD = PD_KP * 0.03 #derivative gain
+PD_KP = 0.09 ##proportional gain
+PD_KD = PD_KP * 0.5 #derivative gain
 
 p_vals = [] # proportional
 d_vals = [] # Derivative
@@ -99,7 +101,7 @@ def init_car():
     # Throttle Motors Control
     throttle = GPIO.PWM(throttle_enable, 50) # set the switching frequency to 50 Hz
 
-    #throttle.start(HALT_SPEED) # starts the motor at 7.5% PWM signal-> (0.075 * battery Voltage) - driver's loss
+    throttle.start(HALT_SPEED) # starts the motor at 7.5% PWM signal-> (0.075 * battery Voltage) - driver's loss
     steering.start(STEER_CENTER) # starts the motor at 7.5% PWM signal-> (0.075 * Battery Voltage) - driver's loss
 
     return throttle, steering
@@ -119,7 +121,7 @@ def main():
         curr_speed = 7.833
         curr_steer = 7.5
 
-        #throttle.ChangeDutyCycle(curr_speed)
+        throttle.ChangeDutyCycle(curr_speed)
         steering.ChangeDutyCycle(curr_steer)
 
 
