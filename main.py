@@ -23,12 +23,10 @@ steer_vals = [] # steering values
 
 HALT_SPEED = 7.5
 IDEAL_SPEED = 7.8
-THROTTLE_MAX = 7.8
+THROTTLE_MAX = 7.9
+THROTTLE_MIN = 7.7
 ENCODER_SENSITIVITY = 7e-5
 
-MIN_ENC_PERIOD = 5000
-MAX_ENC_PERIOD = 10000
-SPEED_DELTA = 0.001
 
 STEER_CENTER = 7.5
 STEER_DIFF = 1.5
@@ -37,7 +35,10 @@ BUFSIZE = 10
 LARGE_NUMBER = 100 # number for red light detection
 
 ENCODER_PARAM = f"/sys/module/speed_driver/parameters/elapsedTime"
-ENCODER_TARGET = 20000
+ENCODER_TARGET = 150000
+ENCODER_MIN = 8000
+ENCODER_MAX = 14000
+SPEED_DELTA = 0.015
 
 # Steering Motor Pins
 steering_enable = 19
@@ -68,11 +69,7 @@ def update_throttle_value() -> int:
     cur_throttle = min(cur_throttle, THROTTLE_MAX)
     print(f"{cur_throttle=}")
     return cur_throttle
-
-def calculate_delta_speed():
-    return ret_val
     
-
 def add_sample_to_buf(sample: int):
     global steer_sum
     global steer_idx
@@ -183,14 +180,15 @@ def main():
             if (curr_tick % 5) == 0:
                 # Speed control 
                 enc_val = read_encoder()
-                delta_speed = 0
-                if enc_val >= MAX_ENC_PERIOD: # Increase speed
-                    delta_speed += SPEED_DELTA
-                if enc_val <= MIN_ENC_PERIOD: # Decrease speed
-                    delta_speed -= SPEED_DELTA
-                if delta_speed != 0:
-                    curr_speed += delta_speed
-                    throttle.ChangeDutyCycle(curr_speed)
+                if enc_val >= ENCODER_MAX: # Increase speed
+                    if curr_speed + SPEED_DELTA <= THROTTLE_MAX:
+                        curr_speed += SPEED_DELTA
+                        throttle.ChangeDutyCycle(curr_speed)
+                elif enc_val <= ENCODER_MIN:
+                    if curr_speed - SPEED_DELTA >= THROTTLE_MIN:
+                        curr_speed -= SPEED_DELTA
+                        throttle.ChangeDutyCycle(curr_speed)
+                print("Throttle: ", curr_speed)
 
             # from 0 to 180
             ret, frame = video.read()
@@ -230,7 +228,7 @@ def main():
             # STEER!
             add_sample_to_buf(turn_amt)
             avg = get_average_sample()
-            print(avg)
+            print("Steering ", avg)
             # diff_steer = avg - curr_steer
             # if diff_steer > 0.05 or diff_steer < -0.05:
             steering.ChangeDutyCycle(avg)
