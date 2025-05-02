@@ -61,6 +61,8 @@ def is_red(frame):
     return result
 
 cap = cv2.VideoCapture(0)  # or replace with your video file or stream URL
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
 if not cap.isOpened():
     print("Cannot open camera")
     exit()

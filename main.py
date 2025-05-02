@@ -5,6 +5,8 @@ import video_processing as vp
 import RPi.GPIO as GPIO
 import time
 
+MAX_TICK_COUNT = 1 << 12
+
 # PD variables
 PD_KP = 0.07 ##proportional gain
 PD_KD = PD_KP * 0.03 #derivative gain
@@ -20,10 +22,14 @@ HALT_SPEED = 7.5
 THROTTLE_MAX = 8.0
 ENCODER_SENSITIVITY = 7e-5
 
+MIN_ENC_PERIOD = 5000
+MAX_ENC_PERIOD = 10000
+SPEED_DELTA = 0.001
+
 STEER_CENTER = 7.5
 STEER_DIFF = 1.5
 
-BUFSIZE = 20
+BUFSIZE = 10
 
 ENCODER_PARAM = f"/sys/module/speed_driver/parameters/elapsedTime"
 ENCODER_TARGET = 2000
@@ -57,6 +63,15 @@ def update_throttle_value() -> int:
     cur_throttle = min(cur_throttle, THROTTLE_MAX)
     print(f"{cur_throttle=}")
     return cur_throttle
+
+def calculate_delta_speed():
+    enc_val = read_encoder()
+    ret_val = 0
+    if enc_val >= MAX_ENC_PERIOD: # Increase speed
+        ret_val += SPEED_DELTA
+    if enc_val <= MIN_ENC_PERIOD: # Decrease speed
+        ret_val -= SPEED_DELTA
+    return ret_val
     
 
 def add_sample_to_buf(sample: int):
@@ -84,19 +99,10 @@ def init_car():
     # Throttle Motors Control
     throttle = GPIO.PWM(throttle_enable, 50) # set the switching frequency to 50 Hz
 
-    throttle.start(HALT_SPEED) # starts the motor at 7.5% PWM signal-> (0.075 * battery Voltage) - driver's loss
+    #throttle.start(HALT_SPEED) # starts the motor at 7.5% PWM signal-> (0.075 * battery Voltage) - driver's loss
     steering.start(STEER_CENTER) # starts the motor at 7.5% PWM signal-> (0.075 * Battery Voltage) - driver's loss
 
     return throttle, steering
-
-def adjust_steering(control_val, steering):
-    if control_val < -45.0: control_val = -45.0
-    elif control_val > 45.0: control_val = 45.0
-    steer_vals.append(control_val)
-    our_diff = (control_val) / 45.0
-    val = STEER_CENTER + (STEER_DIFF * our_diff)
-    # print(val, control_val)
-    steering.ChangeDutyCycle(val)
 
 def main():
     last_time = 0
@@ -110,12 +116,28 @@ def main():
     time.sleep(3)
 
     try: 
-        throttle.ChangeDutyCycle(HALT_SPEED)
+        curr_speed = 7.833
+        curr_steer = 7.5
 
-        while True:
+        #throttle.ChangeDutyCycle(curr_speed)
+        steering.ChangeDutyCycle(curr_steer)
+
+
+        curr_tick = 0
+
+        while curr_tick < MAX_TICK_COUNT:
+            key = cv2.waitKey(1)
+
             # time.sleep(0.04)
-            thr = update_throttle_value()
-            throttle.ChangeDutyCycle(thr)
+            # thr = update_throttle_value()
+            # throttle.ChangeDutyCycle(thr)
+
+            #if (curr_tick % 5) == 0:
+                ## Speed control 
+                #delta_speed = calculate_delta_speed()
+                #if delta_speed != 0:
+                    #curr_speed += delta_speed
+                    #throttle.ChangeDutyCycle(curr_speed)
 
             # from 0 to 180
             read_angle = vp.calculate_steering_angle(video)
@@ -154,7 +176,12 @@ def main():
             # STEER!
             add_sample_to_buf(turn_amt)
             avg = get_average_sample()
-            steering.ChangeDutyCycle(avg)
+            print(avg)
+            diff_steer = avg - curr_steer
+            if diff_steer > 0.05 or diff_steer < -0.05:
+                steering.ChangeDutyCycle(avg)
+                curr_steer = avg
+
             
             # print(f"average_sample={avg}, {our_angle=}, {turn_amt=}")
 
@@ -162,9 +189,7 @@ def main():
 
             # Detect Redlight
 
-            key = cv2.waitKey(1)
-            if key == 27:
-                break
+            curr_tick += 1
 
         video.release()
         cv2.destroyAllWindows()
