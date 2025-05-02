@@ -4,6 +4,7 @@ import numpy as np
 import video_processing as vp
 import RPi.GPIO as GPIO
 import time
+import torch
 import matplotlib as plt
 
 MAX_TICK_COUNT = 1 << 12
@@ -37,7 +38,7 @@ BUFSIZE = 10
 LARGE_NUMBER = 100 # number for red light detection
 
 ENCODER_PARAM = f"/sys/module/speed_driver/parameters/elapsedTime"
-ENCODER_TARGET = 20000
+ENCODER_TARGET = 2000
 
 # Steering Motor Pins
 steering_enable = 19
@@ -70,6 +71,12 @@ def update_throttle_value() -> int:
     return cur_throttle
 
 def calculate_delta_speed():
+    enc_val = read_encoder()
+    ret_val = 0
+    if enc_val >= MAX_ENC_PERIOD: # Increase speed
+        ret_val += SPEED_DELTA
+    if enc_val <= MIN_ENC_PERIOD: # Decrease speed
+        ret_val -= SPEED_DELTA
     return ret_val
     
 
@@ -159,6 +166,9 @@ def main():
     video.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
     video.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
     throttle.ChangeDutyCycle(HALT_SPEED)
+    
+    #object recognition
+    model = torch.hub.load('ultralytics/yolov5', 'yolov5s')
     time.sleep(3)
 
     try: 
@@ -180,20 +190,18 @@ def main():
             # thr = update_throttle_value()
             # throttle.ChangeDutyCycle(thr)
 
-            if (curr_tick % 5) == 0:
-                # Speed control 
-                enc_val = read_encoder()
-                delta_speed = 0
-                if enc_val >= MAX_ENC_PERIOD: # Increase speed
-                    delta_speed += SPEED_DELTA
-                if enc_val <= MIN_ENC_PERIOD: # Decrease speed
-                    delta_speed -= SPEED_DELTA
-                if delta_speed != 0:
-                    curr_speed += delta_speed
-                    throttle.ChangeDutyCycle(curr_speed)
+            #if (curr_tick % 5) == 0:
+                ## Speed control 
+                #delta_speed = calculate_delta_speed()
+                #if delta_speed != 0:
+                    #curr_speed += delta_speed
+                    #throttle.ChangeDutyCycle(curr_speed)
 
             # from 0 to 180
             ret, frame = video.read()
+            if(curr_tick % 10 == 0):
+            	results = model(img)
+            	print(results)
             read_angle = vp.calculate_steering_angle(frame)
             
             # from -90 to 90

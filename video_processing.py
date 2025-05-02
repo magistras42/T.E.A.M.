@@ -2,16 +2,28 @@ import cv2
 import math
 import numpy as np
 
+# Camera resolution
+FRAME_WIDTH = 320
+FRAME_HEIGHT = 240
+
+# HSV Blue color range
 LOWER_LIMIT_BLUE = [80, 100, 0]
 UPPER_LIMIT_BLUE = [150, 255, 255]
 
+# HSV Red color range
 LOWER_LIMIT_RED1 = [0, 40, 60]
 UPPER_LIMIT_RED1 = [10, 255, 255]
-
 LOWER_LIMIT_RED2 = [170,40, 60]
 UPPER_LIMIT_RED2 = [180, 255, 255]
 
-STOP_PERCENT = 30
+# ROI for stop detection
+ROI_X1 = 0
+ROI_Y1 = FRAME_HEIGHT // 2
+ROI_X2 = FRAME_WIDTH
+ROI_Y2 = FRAME_HEIGHT
+
+# Red threshold for stops
+STOP_PERCENT = 40
 
 def init_video():
     video = cv2.VideoCapture(0)
@@ -174,8 +186,8 @@ def display_heading_line(frame, steering_angle, line_color=(0, 0, 255), line_wid
 
     return heading_image
 
-def calculate_steering_angle(video):
-        ret, frame = video.read()
+def calculate_steering_angle(frame):
+        #ret, frame = video.read()
         # frame = cv2.flip(frame,-1)
         hsv = convert_to_HSV(frame)
         edges = detect_edges(hsv)
@@ -192,37 +204,21 @@ def calculate_steering_angle(video):
         return steering_angle
 
 def is_red(frame):
-    # Convert to HSV color space
+    # Convert to HSV
     hsv_frm = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    roi = hsv_frm[ROI_Y1:ROI_Y2, ROI_X1:ROI_X2]
 
-    cv2.imwrite("red.jpg", hsv_frm)
-
-    # lower and upper range for the lower red bound
-    lower_red1 = np.array(LOWER_LIMIT_RED1, dtype="uint8")
-    upper_red1 = np.array(UPPER_LIMIT_RED1, dtype="uint8")
-
-    # lower and upper range for the upper red bound
-    lower_red2 = np.array(LOWER_LIMIT_RED2, dtype="uint8")
-    upper_red2 = np.array(UPPER_LIMIT_RED2, dtype="uint8")
-
-    # create two masks to capture both ranges of red
-    mask1 = cv2.inRange(hsv_frm, lower_red1, upper_red1)
-    mask2 = cv2.inRange(hsv_frm, lower_red2, upper_red2)
-
-    # combine masks
+    # Define red masks
+    mask1 = cv2.inRange(roi, np.array(LOWER_LIMIT_RED1, dtype="uint8"), np.array(UPPER_LIMIT_RED1, dtype="uint8"))
+    mask2 = cv2.inRange(roi, np.array(LOWER_LIMIT_RED2, dtype="uint8"), np.array(UPPER_LIMIT_RED2, dtype="uint8"))
     mask = cv2.bitwise_or(mask1, mask2)
 
-    # apply mask
-    output = cv2.bitwise_and(hsv_frm, hsv_frm, mask=mask)
-
-    # save the output image
-    cv2.imwrite("redmask.jpg", output)
-
-    # calculate what percentage of image falls between color boundaries
-    percent_red = np.count_nonzero(mask) * 100 / np.size(mask)
-    
-    # return if a greater percentage of the image is red than STOP_PERCENT
-    result = STOP_PERCENT < percent_red
-    if result:
+    # Compute red percentage
+    red_pixels = np.count_nonzero(mask)
+    total_pixels = mask.shape[0] * mask.shape[1]
+    percent_red = (red_pixels * 100.0) / total_pixels
+    result = percent_red >= STOP_PERCENT
+    if (result):
         print(percent_red)
+
     return result

@@ -69,6 +69,7 @@ if not cap.isOpened():
 
 print("📷 Press 'q' to quit.")
 while True:
+    time.sleep(0.5)
     ret, frame = cap.read()
     if not ret:
         print("⚠️ Frame grab failed — Exiting.")
