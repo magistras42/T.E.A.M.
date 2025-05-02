@@ -17,19 +17,10 @@ def is_red(frame):
     hsv_frm = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     
     # rough region of interest given our camera setup
-    frame_width = 320
-    frame_height = 240
-
-    roi_width = 100
-    roi_height = 100
-
-    # Calculate top-left corner
-    x1 = (frame_width - roi_width) // 2
-    y1 = (frame_height - roi_height) // 2
-
-    # Calculate bottom-right corner
-    x2 = x1 + roi_width
-    y2 = y1 + roi_height
+    x1 = 110
+    y1 = 60
+    x2 = 210
+    y2 = 160
     roi = hsv_frm[y1:y2, x1:x2]
 
     cv2.imwrite("red.jpg", roi)
