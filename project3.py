@@ -3,6 +3,8 @@ import RPi.GPIO as GPIO
 
 GPIO.setwarnings(False)
 
+FORWARD = 8
+
 
 # Steering Motor Pins
 steering_enable = 19
@@ -38,10 +40,13 @@ time.sleep(1)
 
 throttle.start(7.5) # starts the motor at 7.5% PWM signal-> (0.075 * battery Voltage) - driver's loss
 steering.start(7.5) # starts the motor at 7.5% PWM signal-> (0.075 * Battery Voltage) - driver's loss
+print("Starting halt!")
+time.sleep(5)
 
-throttle.ChangeDutyCycle(8) # go forward
+# throttle.ChangeDutyCycle(8) # go forward
 print("GO FORWARD!")
-time.sleep(2)
+throttle.ChangeDutyCycle(FORWARD)
+time.sleep(10)
 
 throttle.ChangeDutyCycle(7.5) # stop
 print("HALT!")
@@ -50,7 +55,7 @@ time.sleep(2)
 
 # exit(0);
 
-throttle.ChangeDutyCycle(8)
+throttle.ChangeDutyCycle(FORWARD)
 steering.ChangeDutyCycle(5) # turn left
 print("LEFT!!!")
 time.sleep(3)

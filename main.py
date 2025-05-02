@@ -6,8 +6,8 @@ import RPi.GPIO as GPIO
 import time
 
 # PD variables
-PD_KP = 0.04 ##proportional gain
-PD_KD = PD_KP * 0.5 #derivative gain
+PD_KP = 0.07 ##proportional gain
+PD_KD = PD_KP * 0.03 #derivative gain
 
 p_vals = [] # proportional
 d_vals = [] # Derivative
@@ -17,18 +17,62 @@ speed_vals = [] # speed values
 steer_vals = [] # steering values
 
 HALT_SPEED = 7.5
-IDEAL_SPEED = 7.8
+THROTTLE_MAX = 8.0
+ENCODER_SENSITIVITY = 7e-5
+
 STEER_CENTER = 7.5
 STEER_DIFF = 1.5
 
+BUFSIZE = 20
 
+ENCODER_PARAM = f"/sys/module/speed_driver/parameters/elapsedTime"
+ENCODER_TARGET = 2000
+
+# Steering Motor Pins
+steering_enable = 19
+# Throttle Motors Pins
+throttle_enable = 18
+cur_throttle = 7.8
+
+steer_buf = [STEER_CENTER] * BUFSIZE
+steer_idx = 0
+steer_sum = sum(steer_buf)
+start_time = time.time()
+
+def read_encoder() -> int:
+    with open(ENCODER_PARAM) as encoder:
+        res = encoder.read().strip()
+        if time.time() - start_time < 2:
+            return ENCODER_TARGET
+        print(f"ENCODER VALUE = {res}")
+        return int(res)
+
+def get_encoder_error() -> int:
+    return read_encoder() - ENCODER_TARGET
+
+def update_throttle_value() -> int:
+    global cur_throttle
+    cur_throttle += get_encoder_error() * ENCODER_SENSITIVITY
+    cur_throttle = max(cur_throttle, HALT_SPEED)
+    cur_throttle = min(cur_throttle, THROTTLE_MAX)
+    print(f"{cur_throttle=}")
+    return cur_throttle
+    
+
+def add_sample_to_buf(sample: int):
+    global steer_sum
+    global steer_idx
+    steer_sum -= steer_buf[steer_idx]
+    steer_sum += sample
+    steer_buf[steer_idx] = sample
+    steer_idx = (steer_idx + 1) % BUFSIZE
+    
+def get_average_sample():
+    global steer_sum
+    return steer_sum / BUFSIZE
+    
 def init_car():
     GPIO.setwarnings(False)
-
-    # Steering Motor Pins
-    steering_enable = 19
-    # Throttle Motors Pins
-    throttle_enable = 18
 
     GPIO.setmode(GPIO.BCM) # Use GPIO numbering instead of physical numbering
     GPIO.setup(throttle_enable, GPIO.OUT)
@@ -57,18 +101,21 @@ def adjust_steering(control_val, steering):
 def main():
     last_time = 0
     last_error = 0
-
-    video = vp.init_video()
-    time.sleep(1.5)
-
     throttle, steering = init_car()
 
+    video = vp.init_video()
+    video.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+    video.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+    throttle.ChangeDutyCycle(HALT_SPEED)
+    time.sleep(3)
+
     try: 
-        throttle.ChangeDutyCycle(7.8)
+        throttle.ChangeDutyCycle(HALT_SPEED)
 
         while True:
-            time.sleep(0.25)
-            throttle.ChangeDutyCycle(7.6)
+            # time.sleep(0.04)
+            thr = update_throttle_value()
+            throttle.ChangeDutyCycle(thr)
 
             # from 0 to 180
             read_angle = vp.calculate_steering_angle(video)
@@ -81,12 +128,14 @@ def main():
             # dt calculation
             now = time.time()
             dt = now - last_time
+            # print(f"Timing: {dt}")
             last_time = now
 
             # PD Code
             error = our_angle
             proportional = PD_KP * error
             derivative = PD_KD * (error - last_error) / dt
+            # print(f"{proportional=} {derivative=}")
 
             # Append values
             p_vals.append(proportional)
@@ -102,10 +151,12 @@ def main():
             turn_amt = min(STEER_CENTER + STEER_DIFF, turn_amt)
             steer_vals.append(turn_amt)
 
-            print(our_angle, turn_amt)
-
             # STEER!
-            steering.ChangeDutyCycle(turn_amt)
+            add_sample_to_buf(turn_amt)
+            avg = get_average_sample()
+            steering.ChangeDutyCycle(avg)
+            
+            # print(f"average_sample={avg}, {our_angle=}, {turn_amt=}")
 
             # print(turn_amt)
 
@@ -126,8 +177,6 @@ def main():
         steering.stop()
 
         GPIO.cleanup([steering_enable, throttle_enable])
-
-        throttleValues.write(str(0) + '\n')
 
 if __name__ == "__main__":
     main()
