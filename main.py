@@ -4,28 +4,40 @@ import numpy as np
 import video_processing as vp
 import RPi.GPIO as GPIO
 import time
-import matplotlib as plt
+import matplotlib.pyplot as plt
+
+#citations
+
+#User raja_961, “Autonomous Lane-Keeping Car Using Raspberry Pi and OpenCV”. Instructables.
+#URL: https://www.instructables.com/Autonomous-Lane-Keeping-Car-U sing-Raspberry-Pi-and/
+
+#Team Houston Dynamics, "We Have Cybertruck at Home". 
+#URL: https://www.hackster.io/houston-dynamics-spencer-darwall-noah-elzner-agha-sukerim-anthony-zheng/we-have-cybertruck-at-home-0e429f
+
+#For help with plotting code only, we consulted:
+#Team M.E.G.G., "The Magnificent M.E.G.G. Car". 
+#URL: https://www.hackster.io/m-e-g-g/the-magnificent-m-e-g-g-car-28ec89
 
 MAX_TICK_COUNT = 1 << 12
 
 # PD variables
 # PD_KP = 0.07 ##proportional gain
 # PD_KD = PD_KP * 0.03 #derivative gain
-PD_KP = 0.09 ##proportional gain
-PD_KD = PD_KP * 0.35 #derivative gain
+PD_KP = 0.10 ##proportional gain
+PD_KD = PD_KP * 0.01 #derivative gain
 
 p_vals = [] # proportional
 d_vals = [] # Derivative
 err_vals_1 = [] # error
-err_vals_2 = [] # error
 speed_vals = [] # speed values
 steer_vals = [] # steering values
+speed_err = []
 
 HALT_SPEED = 7.5
 IDEAL_SPEED = 7.8
-THROTTLE_MAX = 7.9
-THROTTLE_MIN = 7.7
-ENCODER_SENSITIVITY = 7e-5
+THROTTLE_MAX = 8.0
+THROTTLE_MIN = 7.5
+THROTTLE_TICKS = 3
 
 
 STEER_CENTER = 7.5
@@ -35,10 +47,11 @@ BUFSIZE = 10
 LARGE_NUMBER = 100 # number for red light detection
 
 ENCODER_PARAM = f"/sys/module/speed_driver/parameters/elapsedTime"
-ENCODER_TARGET = 150000
-ENCODER_MIN = 8000
-ENCODER_MAX = 14000
-SPEED_DELTA = 0.015
+ENCODER_TARGET = 3000
+ENCODER_MIN = 10000
+ENCODER_MAX = 40000
+SPEED_DELTA = 0.004
+SLOW_FACTOR = 0.5
 
 # Steering Motor Pins
 steering_enable = 19
@@ -60,14 +73,15 @@ def read_encoder() -> int:
         return int(res)
 
 def get_encoder_error() -> int:
-    return read_encoder() - ENCODER_TARGET
+    retval = read_encoder() - ENCODER_TARGET
+    return retval
 
 def update_throttle_value() -> int:
     global cur_throttle
     cur_throttle += get_encoder_error() * ENCODER_SENSITIVITY
     cur_throttle = max(cur_throttle, HALT_SPEED)
     cur_throttle = min(cur_throttle, THROTTLE_MAX)
-    print(f"{cur_throttle=}")
+    # print(f"{cur_throttle=}")
     return cur_throttle
     
 def add_sample_to_buf(sample: int):
@@ -105,7 +119,7 @@ def plot_pd(p_vals, d_vals, error, show_img=False):
     	plt.show()
     plt.clf()
 
-def plot_pwm(speed_pwms, turn_pwms, error, show_img=False):
+def plot_pwm(speed_pwms, turn_pwms, error, speed_error, show_img=False):
     # Plot the speed steering and the error
     fig, ax1 = plt.subplots()
     t_ax = np.arange(len(speed_pwms))
@@ -114,11 +128,12 @@ def plot_pwm(speed_pwms, turn_pwms, error, show_img=False):
     ax2 = ax1.twinx()
     
     
-    ax1.plot(t_ax, error / np.max(error), '--r', label="Error")
+    ax2.plot(t_ax, error / max(np.max(error), abs(np.min(error))), '--r', label="Steering Error")
+    ax2.plot(t_ax, speed_error / max(np.max(speed_error), abs(np.min(speed_error))), '--b', label="Encoder Error")
 
     ax1.set_xlabel("Frames")
     ax1.set_ylabel("Speed and Steer Duty Cycle")
-    ax2.set_ylabel("Percent Error Value")
+    ax2.set_ylabel("Error Value")
 
     plt.title("Speed and Steer Duty Cycle, and error v.s. time")
     fig.legend()
@@ -126,7 +141,6 @@ def plot_pwm(speed_pwms, turn_pwms, error, show_img=False):
 
     if show_img:
     	plt.show()
-    plt.clf()
 
     
 def init_car():
@@ -154,9 +168,10 @@ def main():
 
     video = vp.init_video()
     video.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-    video.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+    video.set(cv2.CAP_PROP_FRAME_HEIGHT, 176)
     throttle.ChangeDutyCycle(HALT_SPEED)
     time.sleep(3)
+    turn_amt = 7.5
 
     try: 
         curr_speed = IDEAL_SPEED
@@ -168,6 +183,7 @@ def main():
         time_since_red_light = LARGE_NUMBER
         red_light_count = 0
         curr_tick = 0
+        sp_err = 0
 
         while curr_tick < MAX_TICK_COUNT:
             key = cv2.waitKey(1)
@@ -177,22 +193,25 @@ def main():
             # thr = update_throttle_value()
             # throttle.ChangeDutyCycle(thr)
 
-            if (curr_tick % 5) == 0:
+            if (curr_tick % THROTTLE_TICKS) == 0:
                 # Speed control 
                 enc_val = read_encoder()
+                sp_err = 0
                 if enc_val >= ENCODER_MAX: # Increase speed
-                    if curr_speed + SPEED_DELTA <= THROTTLE_MAX:
-                        curr_speed += SPEED_DELTA
+                    sp_err = 1
+                    if curr_speed + SPEED_DELTA * THROTTLE_TICKS <= THROTTLE_MAX:
+                        curr_speed += SPEED_DELTA * THROTTLE_TICKS
                         throttle.ChangeDutyCycle(curr_speed)
                 elif enc_val <= ENCODER_MIN:
-                    if curr_speed - SPEED_DELTA >= THROTTLE_MIN:
-                        curr_speed -= SPEED_DELTA
+                    sp_err = -1
+                    if curr_speed - (SPEED_DELTA * THROTTLE_TICKS) >= THROTTLE_MIN:
+                        curr_speed -= (SLOW_FACTOR * SPEED_DELTA * THROTTLE_TICKS)
                         throttle.ChangeDutyCycle(curr_speed)
-                print("Throttle: ", curr_speed)
+                # print("Throttle: ", curr_speed)
 
             # from 0 to 180
             ret, frame = video.read()
-            read_angle = vp.calculate_steering_angle(frame)
+            read_angle = vp.calculate_steering_angle(frame, turn_amt)
             
             # from -90 to 90
             our_angle = read_angle - 90
@@ -215,7 +234,8 @@ def main():
             p_vals.append(proportional)
             d_vals.append(derivative)
             err_vals_1.append(error)
-            # speed_vals.append(curr_speed)
+            speed_vals.append(curr_speed)
+            speed_err.append(sp_err)
 
             last_error = error 
 
@@ -228,7 +248,7 @@ def main():
             # STEER!
             add_sample_to_buf(turn_amt)
             avg = get_average_sample()
-            print("Steering ", avg)
+            # print("Steering ", avg)
             # diff_steer = avg - curr_steer
             # if diff_steer > 0.05 or diff_steer < -0.05:
             steering.ChangeDutyCycle(avg)
@@ -260,17 +280,26 @@ def main():
 
         video.release()
         cv2.destroyAllWindows()
-        plot_pd(p_vals, d_vals, error, show_img=True)
-        plot_pwm(speed_vals, steer_vals, error, show_img=True)
+        throttle.stop()
+        steering.stop()
+        GPIO.cleanup([steering_enable, throttle_enable])
+
+        plot_pd(p_vals, d_vals, err_vals_1, show_img=True)
+        plot_pwm(speed_vals, steer_vals, err_vals_1, speed_err, show_img=True)
         
     except KeyboardInterrupt or Exception:
         # Handling for end to program
         print("Stopping program...")
         
+        video.release()
+        cv2.destroyAllWindows()
         throttle.stop()
         steering.stop()
 
         GPIO.cleanup([steering_enable, throttle_enable])
+
+        plot_pd(p_vals, d_vals, err_vals_1, show_img=True)
+        plot_pwm(speed_vals, steer_vals, err_vals_1, speed_err, show_img=True)
 
 if __name__ == "__main__":
     main()

@@ -4,10 +4,10 @@ import numpy as np
 
 # Camera resolution
 FRAME_WIDTH = 320
-FRAME_HEIGHT = 240
+FRAME_HEIGHT = 176
 
 # HSV Blue color range
-LOWER_LIMIT_BLUE = [80, 100, 0]
+LOWER_LIMIT_BLUE = [40, 100, 80]
 UPPER_LIMIT_BLUE = [150, 255, 255]
 
 # HSV Red color range
@@ -23,24 +23,25 @@ ROI_X2 = FRAME_WIDTH
 ROI_Y2 = FRAME_HEIGHT
 
 # Red threshold for stops
-STOP_PERCENT = 40
+STOP_PERCENT = 30
 
 def init_video():
     video = cv2.VideoCapture(0)
     video.set(cv2.CAP_PROP_FRAME_WIDTH,320)
-    video.set(cv2.CAP_PROP_FRAME_HEIGHT,240)
+    video.set(cv2.CAP_PROP_FRAME_HEIGHT,176)
     return video
 
 def convert_to_HSV(frame):
   hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-  # cv2.imshow("HSV",hsv)
+#   cv2.imshow("HSV",hsv)
   return hsv
 
 def detect_edges(hsv):
     lower_blue = np.array(LOWER_LIMIT_BLUE, dtype = "uint8") # lower limit of blue color
     upper_blue = np.array(UPPER_LIMIT_BLUE, dtype="uint8") # upper limit of blue color
     mask = cv2.inRange(hsv, lower_blue, upper_blue) # this mask will filter out everything but blue
-
+    # cv2.imshow("lanes", mask)
+    
     # detect edges
     edges = cv2.Canny(mask, 50, 100) 
     # cv2.imshow("edges",edges)
@@ -69,7 +70,8 @@ def detect_line_segments(cropped_edges):
     theta = np.pi / 180  
     min_threshold = 10 
     line_segments = cv2.HoughLinesP(cropped_edges, rho, theta, min_threshold, 
-                                    np.array([]), minLineLength=5, maxLineGap=0)
+                                    np.array([]), minLineLength=10, maxLineGap=2)
+    # print(line_segments)
     return line_segments
 
 def make_points(frame, line):
@@ -96,7 +98,7 @@ def average_slope_intercept(frame, line_segments):
     height, width,_ = frame.shape
     left_fit = []
     right_fit = []
-    boundary = 1/3
+    boundary = 1/8
 
     left_region_boundary = width * (1 - boundary)
     right_region_boundary = width * boundary
@@ -186,7 +188,7 @@ def display_heading_line(frame, steering_angle, line_color=(0, 0, 255), line_wid
 
     return heading_image
 
-def calculate_steering_angle(frame):
+def calculate_steering_angle(frame, cur_steering_angle):
         #ret, frame = video.read()
         # frame = cv2.flip(frame,-1)
         hsv = convert_to_HSV(frame)
@@ -197,6 +199,7 @@ def calculate_steering_angle(frame):
         lane_lines_image = display_lines(frame,lane_lines)
         steering_angle = get_steering_angle(frame, lane_lines)
         heading_image = display_heading_line(lane_lines_image,steering_angle)
+        heading_image = display_heading_line(heading_image,cur_steering_angle,line_color=(255,0,0))
 
         # FIXME: Comment out?
         cv2.imshow("angle", heading_image)

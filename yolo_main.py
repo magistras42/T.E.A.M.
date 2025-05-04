@@ -2,287 +2,169 @@ import cv2
 import math
 import numpy as np
 import video_processing as vp
-import RPi.GPIO as GPIO
 import time
 import torch
 import matplotlib as plt
+from ultralytics import YOLO
 
-MAX_TICK_COUNT = 1 << 12
+frames = []
+periods = []
 
-# PD variables
-# PD_KP = 0.07 ##proportional gain
-# PD_KD = PD_KP * 0.03 #derivative gain
-PD_KP = 0.09 ##proportional gain
-PD_KD = PD_KP * 0.35 #derivative gain
-
-p_vals = [] # proportional
-d_vals = [] # Derivative
-err_vals_1 = [] # error
-err_vals_2 = [] # error
-speed_vals = [] # speed values
-steer_vals = [] # steering values
-
-HALT_SPEED = 7.5
-IDEAL_SPEED = 7.8
-THROTTLE_MAX = 7.8
-ENCODER_SENSITIVITY = 7e-5
-
-MIN_ENC_PERIOD = 5000
-MAX_ENC_PERIOD = 10000
-SPEED_DELTA = 0.001
-
-STEER_CENTER = 7.5
-STEER_DIFF = 1.5
-
-BUFSIZE = 10
-LARGE_NUMBER = 100 # number for red light detection
-
-ENCODER_PARAM = f"/sys/module/speed_driver/parameters/elapsedTime"
-ENCODER_TARGET = 2000
-
-# Steering Motor Pins
-steering_enable = 19
-# Throttle Motors Pins
-throttle_enable = 18
-cur_throttle = IDEAL_SPEED
-
-steer_buf = [STEER_CENTER] * BUFSIZE
-steer_idx = 0
-steer_sum = sum(steer_buf)
-start_time = time.time()
-
-def read_encoder() -> int:
-    with open(ENCODER_PARAM) as encoder:
-        res = encoder.read().strip()
-        if time.time() - start_time < 2:
-            return ENCODER_TARGET
-        print(f"ENCODER VALUE = {res}")
-        return int(res)
-
-def get_encoder_error() -> int:
-    return read_encoder() - ENCODER_TARGET
-
-def update_throttle_value() -> int:
-    global cur_throttle
-    cur_throttle += get_encoder_error() * ENCODER_SENSITIVITY
-    cur_throttle = max(cur_throttle, HALT_SPEED)
-    cur_throttle = min(cur_throttle, THROTTLE_MAX)
-    print(f"{cur_throttle=}")
-    return cur_throttle
-
-def calculate_delta_speed():
-    enc_val = read_encoder()
-    ret_val = 0
-    if enc_val >= MAX_ENC_PERIOD: # Increase speed
-        ret_val += SPEED_DELTA
-    if enc_val <= MIN_ENC_PERIOD: # Decrease speed
-        ret_val -= SPEED_DELTA
-    return ret_val
-    
-
-def add_sample_to_buf(sample: int):
-    global steer_sum
-    global steer_idx
-    steer_sum -= steer_buf[steer_idx]
-    steer_sum += sample
-    steer_buf[steer_idx] = sample
-    steer_idx = (steer_idx + 1) % BUFSIZE
-    
-def get_average_sample():
-    global steer_sum
-    return steer_sum / BUFSIZE
-
-def plot_pd(p_vals, d_vals, error, show_img=False):
-    # Plot the proportional, derivative and error
-    fig, ax1 = plt.subplots()
-    t_ax = np.arange(len(p_vals))
-    ax1.plot(t_ax, p_vals, '-', label="P values")
-    ax1.plot(t_ax, d_vals, '-', label="D values")
-    ax2 = ax1.twinx()
-    ax2.plot(t_ax, error, '--r', label="Error")
-
-    ax1.set_xlabel("Frames")
-    ax1.set_ylabel("PD Value")
-    ax2.set_ylim(-90, 90)
-    ax2.set_ylabel("Error Value")
-
-    plt.title("PD Values over time")
-    fig.legend()
-    fig.tight_layout()
-    plt.savefig("pd_plot.png")
-
-    if show_img:
-    	plt.show()
-    plt.clf()
-
-def plot_pwm(speed_pwms, turn_pwms, error, show_img=False):
-    # Plot the speed steering and the error
-    fig, ax1 = plt.subplots()
-    t_ax = np.arange(len(speed_pwms))
-    ax1.plot(t_ax, speed_pwms, '-', label="Speed")
-    ax1.plot(t_ax, turn_pwms, '-', label="Steering")
-    ax2 = ax1.twinx()
-    
-    
-    ax1.plot(t_ax, error / np.max(error), '--r', label="Error")
-
-    ax1.set_xlabel("Frames")
-    ax1.set_ylabel("Speed and Steer Duty Cycle")
-    ax2.set_ylabel("Percent Error Value")
-
-    plt.title("Speed and Steer Duty Cycle, and error v.s. time")
-    fig.legend()
-    plt.savefig("voltage_plot.png")
-
-    if show_img:
-    	plt.show()
-    plt.clf()
-
-    
-def init_car():
-    GPIO.setwarnings(False)
-
-    GPIO.setmode(GPIO.BCM) # Use GPIO numbering instead of physical numbering
-    GPIO.setup(throttle_enable, GPIO.OUT)
-    GPIO.setup(steering_enable, GPIO.OUT)
-
-    # Steering Motor Control
-    steering = GPIO.PWM(steering_enable, 50) # set the switching frequency to 50 Hz
-
-    # Throttle Motors Control
-    throttle = GPIO.PWM(throttle_enable, 50) # set the switching frequency to 50 Hz
-
-    throttle.start(HALT_SPEED) # starts the motor at 7.5% PWM signal-> (0.075 * battery Voltage) - driver's loss
-    steering.start(STEER_CENTER) # starts the motor at 7.5% PWM signal-> (0.075 * Battery Voltage) - driver's loss
-
-    return throttle, steering
-
-def main():
-    last_time = 0
-    last_error = 0
-    throttle, steering = init_car()
-
+try:
     video = vp.init_video()
     video.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-    video.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
-    throttle.ChangeDutyCycle(HALT_SPEED)
-    
-    #object recognition
-    model = torch.hub.load('ultralytics/yolov5', 'yolov5s')
-    time.sleep(3)
+    video.set(cv2.CAP_PROP_FRAME_HEIGHT, 320)
 
-    try: 
-        curr_speed = IDEAL_SPEED
-        curr_steer = 7.5
+    # Object recognition model
+    model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
+    model.eval()
 
-        throttle.ChangeDutyCycle(curr_speed)
-        steering.ChangeDutyCycle(curr_steer)
+    t = time.time()
 
-        time_since_red_light = LARGE_NUMBER
-        red_light_count = 0
-        curr_tick = 0
+    while True:
+        ret, frame = video.read()
+        if not ret:
+            break
 
-        while curr_tick < MAX_TICK_COUNT:
-            key = cv2.waitKey(1)
-            time_since_red_light += 0.1
+        img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = model(img)
 
-            # time.sleep(0.04)
-            # thr = update_throttle_value()
-            # throttle.ChangeDutyCycle(thr)
+        # Draw detections
+        for x1, y1, x2, y2, conf, cls in results.xyxy[0]:
+            x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+            label = f"{model.names[int(cls)]} {conf:.2f}"
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.putText(frame, label, (x1, y1 - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
-            #if (curr_tick % 5) == 0:
-                ## Speed control 
-                #delta_speed = calculate_delta_speed()
-                #if delta_speed != 0:
-                    #curr_speed += delta_speed
-                    #throttle.ChangeDutyCycle(curr_speed)
+        # Store frame in memory
+        frames.append(frame.copy())
 
-            # from 0 to 180
-            ret, frame = video.read()
-            if(curr_tick % 10 == 0):
-            	results = model(img)
-            	print(results)
-            read_angle = vp.calculate_steering_angle(frame)
-            
-            # from -90 to 90
-            our_angle = read_angle - 90
+        # Display the frame
+        cv2.imshow("YOLOv5", frame)
 
-            # print(read_angle, our_angle)
+        # Framerate tracking
+        nt = time.time()
+        td = nt - t
+        t = nt
+        periods.append(td)
 
-            # dt calculation
-            now = time.time()
-            dt = now - last_time
-            # print(f"Timing: {dt}")
-            last_time = now
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
 
-            # PD Code
-            error = our_angle
-            proportional = PD_KP * error
-            derivative = PD_KD * (error - last_error) / dt
-            # print(f"{proportional=} {derivative=}")
+    video.release()
+    cv2.destroyAllWindows()
 
-            # Append values
-            p_vals.append(proportional)
-            d_vals.append(derivative)
-            err_vals_1.append(error)
-            # speed_vals.append(curr_speed)
+except KeyboardInterrupt or Exception as e:
+    video.release()
+    cv2.destroyAllWindows()
 
-            last_error = error 
+    if len(periods) > 1:
+        periods.pop(0)
 
-            # PD Control!
-            turn_amt = STEER_CENTER + proportional + derivative
-            turn_amt = max(STEER_CENTER - STEER_DIFF, turn_amt)
-            turn_amt = min(STEER_CENTER + STEER_DIFF, turn_amt)
-            steer_vals.append(turn_amt)
+    ave_period = sum(periods) / len(periods)
+    ave_fps = 1 / ave_period
+    print("Average framerate: {:.2f}".format(ave_fps))
 
-            # STEER!
-            add_sample_to_buf(turn_amt)
-            avg = get_average_sample()
-            print(avg)
-            # diff_steer = avg - curr_steer
-            # if diff_steer > 0.05 or diff_steer < -0.05:
-            steering.ChangeDutyCycle(avg)
-                # curr_steer = avg
+    # Save video using average framerate
+    if frames:
+        frame_height, frame_width = frames[0].shape[:2]
+        size = (frame_width, frame_height)
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out = cv2.VideoWriter('output.mp4', fourcc, ave_fps, size)
 
-            
-            # print(f"average_sample={avg}, {our_angle=}, {turn_amt=}")
+        for f in frames:
+            out.write(f)
 
-            # print(turn_amt)
+        out.release()
+        print("Video saved as output.mp4")
 
-            # Detect Redlight
-            if(time_since_red_light > 50 and (curr_tick % 5) == 0 and vp.is_red(frame)):
-                print("red light detect")
-            
-                if(red_light_count == 0):               
-            	    #for first sign, stop then restart
-                    throttle.ChangeDutyCycle(HALT_SPEED)
-                    time.sleep(3)
-                    throttle.ChangeDutyCycle(IDEAL_SPEED)
-                    time_since_red_light = 0
-                    red_light_count += 1
-                else:
-            	    #for second time, stop then turn car off
-                    throttle.ChangeDutyCycle(HALT_SPEED)
-                    break
-            
+"""
+import cv2
+import math
+import numpy as np
+import video_processing as vp
+import time
+import torch
+import matplotlib as plt
+from ultralytics import YOLO
 
-            curr_tick += 1
+periods = []
 
-        video.release()
-        cv2.destroyAllWindows()
-        plot_pd(p_vals, d_vals, error, show_img=True)
-        plot_pwm(speed_vals, steer_vals, error, show_img=True)
-        
-    except KeyboardInterrupt or Exception:
-        # Handling for end to program
-        print("Stopping program...")
-        
-        throttle.stop()
-        steering.stop()
+try:
+    video = vp.init_video()
+    video.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+    video.set(cv2.CAP_PROP_FRAME_HEIGHT, 320)
 
-        GPIO.cleanup([steering_enable, throttle_enable])
+    # Get the frames per second of the video input
+    fps = video.get(cv2.CAP_PROP_FPS) or 20.0  # fallback if FPS not available
 
-if __name__ == "__main__":
-    main()
+    # Get frame size
+    frame_width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    frame_size = (frame_width, frame_height)
 
+    # Set up video writer
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')  # or 'MP4V' for .mp4
+    out = cv2.VideoWriter('output.avi', fourcc, fps, frame_size)
 
+    # Object recognition model
+    model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
+    model.eval()
+
+    t = time.time()
+
+    while True:
+        ret, frame = video.read()
+        if not ret:
+            break
+
+        img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = model(img)
+
+        # Draw detections
+        for x1, y1, x2, y2, conf, cls in results.xyxy[0]:
+            x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+            label = f"{model.names[int(cls)]} {conf:.2f}"
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.putText(frame, label, (x1, y1 - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+
+        # Show and save the frame
+        cv2.imshow("YOLOv5", frame)
+        out.write(frame)
+
+        # Framerate tracking
+        nt = time.time()
+        td = nt - t
+        t = nt
+        periods.append(td)
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    video.release()
+    out.release()
+    cv2.destroyAllWindows()
+
+except KeyboardInterrupt or Exception:
+    video.release()
+    out.release()
+    cv2.destroyAllWindows()
+    # Set your desired framerate (e.g., 15.0, 30.0)
+    desired_fps = 15.0
+
+    # Frame size
+    frame_width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    frame_size = (frame_width, frame_height)
+
+    # Set up video writer for MP4
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Codec for .mp4
+    out = cv2.VideoWriter('output.mp4', fourcc, desired_fps, frame_size)
+    periods.pop(0)
+    ave_period = sum(periods) / len(periods)
+    freq = 1 / ave_period
+    print("Average framerate: ", freq)
+
+"""

@@ -7,7 +7,7 @@ if not cap.isOpened():
     exit()
 
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 176)
 
 
 while True:
